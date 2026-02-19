@@ -1,5 +1,8 @@
 import time
+from concurrent.futures import wait
 from hashlib import sha256
+import concurrent.futures
+import os
 
 
 PASSWORDS_TO_BRUTE_FORCE = [
@@ -15,13 +18,43 @@ PASSWORDS_TO_BRUTE_FORCE = [
     "e5f3ff26aa8075ce7513552a9af1882b4fbc2a47a3525000f6eb887ab9622207",
 ]
 
+NUM_OF_PROCESSORS = max(1, os.cpu_count() - 1)
+LENGTH_OF_PASSWORD = 8
+AMOUNT_OF_SYMBOLS = 10
+MAIN_RANGE = AMOUNT_OF_SYMBOLS**LENGTH_OF_PASSWORD
+
+
+def check_range(start: int, end: int) -> list:
+    targets = set(PASSWORDS_TO_BRUTE_FORCE)
+    found = []
+    for password in range(start, end):
+        candidate = f"{password:08d}"
+        hash_r = sha256_hash_str(candidate)
+
+        if hash_r in targets:
+            print(f"[!] MATCH FOUND: {candidate=} | {hash_r=}")
+            found.append((candidate, hash_r))
+    return found
+
 
 def sha256_hash_str(to_hash: str) -> str:
     return sha256(to_hash.encode("utf-8")).hexdigest()
 
 
 def brute_force_password() -> None:
-    pass
+    with concurrent.futures.ProcessPoolExecutor(
+            max_workers=NUM_OF_PROCESSORS
+    ) as executor:
+        futures = []
+        chunk = MAIN_RANGE // NUM_OF_PROCESSORS
+
+        for unit in range(NUM_OF_PROCESSORS):
+            start = unit * chunk
+            end = (unit + 1) * chunk
+            if unit == NUM_OF_PROCESSORS - 1:
+                end = MAIN_RANGE
+            futures.append(executor.submit(check_range, start, end))
+    wait(futures)
 
 
 if __name__ == "__main__":
