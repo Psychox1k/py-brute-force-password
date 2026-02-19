@@ -18,20 +18,23 @@ PASSWORDS_TO_BRUTE_FORCE = [
     "e5f3ff26aa8075ce7513552a9af1882b4fbc2a47a3525000f6eb887ab9622207",
 ]
 
-NUM_OF_PROCESSORS = max(1, os.cpu_count() - 1)
+CPU_COUNT = os.cpu_count() or 1
+NUM_OF_PROCESSORS = max(1, CPU_COUNT - 1)
+
 LENGTH_OF_PASSWORD = 8
 AMOUNT_OF_SYMBOLS = 10
 MAIN_RANGE = AMOUNT_OF_SYMBOLS**LENGTH_OF_PASSWORD
+TARGETS = set(PASSWORDS_TO_BRUTE_FORCE)
 
 
 def check_range(start: int, end: int) -> list:
-    targets = set(PASSWORDS_TO_BRUTE_FORCE)
     found = []
-    for password in range(start, end):
-        candidate = f"{password:08d}"
+
+    for passwd in range(start, end):
+        candidate = f"{passwd:08d}"
         hash_r = sha256_hash_str(candidate)
 
-        if hash_r in targets:
+        if hash_r in TARGETS:
             print(f"[!] MATCH FOUND: {candidate=} | {hash_r=}")
             found.append((candidate, hash_r))
     return found
@@ -41,7 +44,8 @@ def sha256_hash_str(to_hash: str) -> str:
     return sha256(to_hash.encode("utf-8")).hexdigest()
 
 
-def brute_force_password() -> None:
+def brute_force_password() -> list:
+    all_results = []
     with concurrent.futures.ProcessPoolExecutor(
             max_workers=NUM_OF_PROCESSORS
     ) as executor:
@@ -53,13 +57,30 @@ def brute_force_password() -> None:
             end = (unit + 1) * chunk
             if unit == NUM_OF_PROCESSORS - 1:
                 end = MAIN_RANGE
+
             futures.append(executor.submit(check_range, start, end))
-    wait(futures)
+
+    for f in concurrent.futures.as_completed(futures):
+        all_results.extend(f.result())
+
+    return all_results
 
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    brute_force_password()
+    final_list = brute_force_password()
     end_time = time.perf_counter()
 
-    print("Elapsed:", end_time - start_time)
+    print("\n ---FINAL REPORT---")
+    for password, hask_v in final_list:
+        print(f"Password: {password} -> Hash: {hask_v}")
+
+    expected_count = len(PASSWORDS_TO_BRUTE_FORCE)
+    actual_count = len(final_list)
+
+    assert actual_count == expected_count, (
+        f"Expected {expected_count} password, but found {actual_count}"
+    )
+
+    print(f"\n[SUCCESS] All {actual_count} passwords recovered.")
+    print(f"Elapsed time: {end_time - start_time:.2f} seconds")
