@@ -44,8 +44,8 @@ def sha256_hash_str(to_hash: str) -> str:
     return sha256(to_hash.encode("utf-8")).hexdigest()
 
 
-def brute_force_password() -> list:
-    all_results = []
+def brute_force_password() -> dict:
+    recovered_data = {}
     with concurrent.futures.ProcessPoolExecutor(
             max_workers=NUM_OF_PROCESSORS
     ) as executor:
@@ -61,26 +61,26 @@ def brute_force_password() -> list:
             futures.append(executor.submit(check_range, start, end))
 
     for f in concurrent.futures.as_completed(futures):
-        all_results.extend(f.result())
-
-    return all_results
+        batch = f.result()
+        for passw, hash_v in batch:
+            recovered_data[hash_v] = passw
+    return recovered_data
 
 
 if __name__ == "__main__":
     start_time = time.perf_counter()
-    final_list = brute_force_password()
-    end_time = time.perf_counter()
-
-    print("\n ---FINAL REPORT---")
-    for password, hask_v in final_list:
-        print(f"Password: {password} -> Hash: {hask_v}")
+    results_map = brute_force_password()
 
     expected_count = len(PASSWORDS_TO_BRUTE_FORCE)
-    actual_count = len(final_list)
+    actual_count = len(results_map)
 
     assert actual_count == expected_count, (
-        f"Expected {expected_count} password, but found {actual_count}"
+        f"Expected {expected_count} unique passwords, but found {actual_count}"
     )
+    print("\n--- FINAL REPORT ---")
+    for hash_v, password in results_map.items():
+        print(f"Password: {password} -> Hash: {hash_v}")
 
+    end_time = time.perf_counter()
     print(f"\n[SUCCESS] All {actual_count} passwords recovered.")
-    print(f"Elapsed time: {end_time - start_time:.2f} seconds")
+    print(f"Elapsed: {end_time - start_time:.2f} seconds")
